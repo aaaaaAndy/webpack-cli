@@ -60,11 +60,16 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const util = require("util");
 
+// 这里引入 commander 处理命令行输入
+// @see https://github.com/tj/commander.js/blob/HEAD/Readme_zh-CN.md
 const { program, Option } = require("commander");
 
 const WEBPACK_PACKAGE = process.env.WEBPACK_PACKAGE || "webpack";
 const WEBPACK_DEV_SERVER_PACKAGE = process.env.WEBPACK_DEV_SERVER_PACKAGE || "webpack-dev-server";
 
+/**
+ * webpack-cli 的主要逻辑都在这个类中
+ */
 class WebpackCLI implements IWebpackCLI {
   colors: WebpackCLIColors;
   logger: WebpackCLILogger;
@@ -108,6 +113,10 @@ class WebpackCLI implements IWebpackCLI {
     return str.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
   }
 
+  /**
+   * 主要继承 colorette 包，用来对命令行进行格式化输出，比如加字体颜色，背景颜色，字体加粗，斜体等
+   * @see https://www.npmjs.com/package/colorette
+   */
   createColors(useColor?: boolean): WebpackCLIColors {
     const { createColors, isColorSupported } = require("colorette");
 
@@ -122,6 +131,9 @@ class WebpackCLI implements IWebpackCLI {
     return { ...createColors({ useColor: shouldUseColor }), isColorSupported: shouldUseColor };
   }
 
+  /**
+   * 继承 console 下的几种方法并格式化输出
+   */
   getLogger(): WebpackCLILogger {
     return {
       error: (val) => console.error(`[webpack-cli] ${this.colors.red(util.format(val))}`),
@@ -133,6 +145,11 @@ class WebpackCLI implements IWebpackCLI {
     };
   }
 
+  /**
+   * 根据 packageName 判断 node_modules 下是否存在此依赖包
+   * @param  {string}  packageName [description]
+   * @return {boolean}             [description]
+   */
   checkPackageExists(packageName: string): boolean {
     if (process.versions.pnp) {
       return true;
@@ -231,6 +248,9 @@ class WebpackCLI implements IWebpackCLI {
     }
   }
 
+  /**
+   * 安装依赖，在执行命令的过程中发现有需要的依赖包没有安装时，调用此方法安装依赖
+   */
   async doInstall(packageName: string, options: PackageInstallOptions = {}): Promise<string> {
     const packageManager = this.getDefaultPackageManager();
 
@@ -307,6 +327,9 @@ class WebpackCLI implements IWebpackCLI {
     process.exit(2);
   }
 
+  /**
+   * 使用 require 方法引入 module 包
+   */
   async tryRequireThenImport<T>(module: ModuleName, handleError = true): Promise<T> {
     let result;
 
@@ -362,11 +385,19 @@ class WebpackCLI implements IWebpackCLI {
     return result;
   }
 
+  /**
+   * 组合命令，主要调用 commander 的方法组合命令
+   * @see https://github.com/tj/commander.js/blob/HEAD/Readme_zh-CN.md
+   * @param  {WebpackCLIOptions}        commandOptions 配置好的命令格式
+   * @param  {WebpackCLICommandOptions} options        命令选项
+   * @param  {CommandAction}            action         action 详情可见 commander 怎么注册 action
+   */
   async makeCommand(
     commandOptions: WebpackCLIOptions,
     options: WebpackCLICommandOptions,
     action: CommandAction,
   ): Promise<WebpackCLICommand | undefined> {
+    // 已经加载的命令
     const alreadyLoaded = this.program.commands.find(
       (command) =>
         command.name() === commandOptions.name.split(" ")[0] ||
@@ -377,6 +408,7 @@ class WebpackCLI implements IWebpackCLI {
       return;
     }
 
+    // 加载命令
     const command = this.program.command(commandOptions.name, {
       noHelp: commandOptions.noHelp,
       hidden: commandOptions.hidden,
@@ -407,6 +439,7 @@ class WebpackCLI implements IWebpackCLI {
 
     let allDependenciesInstalled = true;
 
+    // 判断命令中是否有依赖，如果有依赖，判断 package.json中是否安装了这些依赖
     if (commandOptions.dependencies && commandOptions.dependencies.length > 0) {
       for (const dependency of commandOptions.dependencies) {
         const isPkgExist = this.checkPackageExists(dependency);
@@ -472,6 +505,11 @@ class WebpackCLI implements IWebpackCLI {
     return command;
   }
 
+  /**
+   * 组合 option
+   * @param {WebpackCLICommand}       command [description]
+   * @param {WebpackCLIBuiltInOption} option  [description]
+   */
   makeOption(command: WebpackCLICommand, option: WebpackCLIBuiltInOption) {
     let mainOption: WebpackCLIMainOption;
     let negativeOption;
@@ -691,6 +729,10 @@ class WebpackCLI implements IWebpackCLI {
     }
   }
 
+  /**
+   * 获取 build 命令的参数
+   * @return {WebpackCLIBuiltInOption[]} [description]
+   */
   getBuiltInOptions(): WebpackCLIBuiltInOption[] {
     if (this.builtInOptionsCache) {
       return this.builtInOptionsCache;
@@ -1028,12 +1070,20 @@ class WebpackCLI implements IWebpackCLI {
     return options;
   }
 
+  /**
+   * 引入 webpack
+   * @param {[type]} handleError = true [description]
+   */
   async loadWebpack(handleError = true) {
     return this.tryRequireThenImport<typeof webpack>(WEBPACK_PACKAGE, handleError);
   }
 
+  /**
+   * 一个将近 800 行的 run 方法，此类实例化后直接调用了该方法，可以视为 WebpackCLI 类的入口方法
+   */
   async run(args: Parameters<WebpackCLICommand["parseOptions"]>[0], parseOptions: ParseOptions) {
     // Built-in internal commands
+    // build 命令配置
     const buildCommandOptions = {
       name: "build [entries...]",
       alias: ["bundle", "b"],
@@ -1041,6 +1091,7 @@ class WebpackCLI implements IWebpackCLI {
       usage: "[entries...] [options]",
       dependencies: [WEBPACK_PACKAGE],
     };
+    // watch 命令配置
     const watchCommandOptions = {
       name: "watch [entries...]",
       alias: "w",
@@ -1048,12 +1099,14 @@ class WebpackCLI implements IWebpackCLI {
       usage: "[entries...] [options]",
       dependencies: [WEBPACK_PACKAGE],
     };
+    // version 命令配置
     const versionCommandOptions = {
       name: "version [commands...]",
       alias: "v",
       description:
         "Output the version number of 'webpack', 'webpack-cli' and 'webpack-dev-server' and commands.",
     };
+    // help 命令配置
     const helpCommandOptions = {
       name: "help [command] [option]",
       alias: "h",
@@ -1098,6 +1151,7 @@ class WebpackCLI implements IWebpackCLI {
       },
     ];
 
+    // 已配置命令，这里是不是用大写好一点？
     const knownCommands = [
       buildCommandOptions,
       watchCommandOptions,
@@ -1105,13 +1159,19 @@ class WebpackCLI implements IWebpackCLI {
       helpCommandOptions,
       ...externalBuiltInCommandsInfo,
     ];
+
+    // 获取配置命令的 name
     const getCommandName = (name: string) => name.split(" ")[0];
+
+    // 判断是否为已知命令
     const isKnownCommand = (name: string) =>
       knownCommands.find(
         (command) =>
           getCommandName(command.name) === name ||
           (Array.isArray(command.alias) ? command.alias.includes(name) : command.alias === name),
       );
+
+    // 判断输入的命令是否为已配置命令中的其中一个
     const isCommand = (input: string, commandOptions: WebpackCLIOptions) => {
       const longName = getCommandName(commandOptions.name);
 
@@ -1133,7 +1193,11 @@ class WebpackCLI implements IWebpackCLI {
       this.program.commands.find(
         (command) => name === command.name() || command.aliases().includes(name),
       );
+
+    // 是否为命令中的选项，比如 --version
     const isOption = (value: string): boolean => value.startsWith("-");
+
+    // 是否为全局命令选项
     const isGlobalOption = (value: string) =>
       value === "--color" ||
       value === "--no-color" ||
@@ -1142,17 +1206,24 @@ class WebpackCLI implements IWebpackCLI {
       value === "-h" ||
       value === "--help";
 
+    // 根据 name 加载对应命令
     const loadCommandByName = async (
       commandName: WebpackCLIExternalCommandInfo["name"],
       allowToInstall = false,
     ) => {
+      // 判断是否为 build 命令
       const isBuildCommandUsed = isCommand(commandName, buildCommandOptions);
+
+      // 判断是否为 watch 命令
       const isWatchCommandUsed = isCommand(commandName, watchCommandOptions);
 
+      // 如果是 build 或者 watch 命令
       if (isBuildCommandUsed || isWatchCommandUsed) {
+        // 其实这里用三元运算符不是太合规
         await this.makeCommand(
           isBuildCommandUsed ? buildCommandOptions : watchCommandOptions,
           async () => {
+            // 加载 webpack 包
             this.webpack = await this.loadWebpack();
 
             return isWatchCommandUsed
@@ -1168,10 +1239,12 @@ class WebpackCLI implements IWebpackCLI {
           },
         );
       } else if (isCommand(commandName, helpCommandOptions)) {
+        // 如果是 help 命令
         // Stub for the `help` command
         // eslint-disable-next-line @typescript-eslint/no-empty-function
         this.makeCommand(helpCommandOptions, [], () => {});
       } else if (isCommand(commandName, versionCommandOptions)) {
+        // 如果是 version 命令
         // Stub for the `version` command
         // eslint-disable-next-line @typescript-eslint/no-empty-function
         this.makeCommand(versionCommandOptions, [], () => {});
@@ -1701,6 +1774,7 @@ class WebpackCLI implements IWebpackCLI {
     // Default action
     this.program.usage("[options]");
     this.program.allowUnknownOption(true);
+    // 还行 webpack build 等命令时，会进入到这里，其底层还是调用 commander 的 action 方法
     this.program.action(async (options, program: WebpackCLICommand) => {
       if (!isInternalActionCalled) {
         isInternalActionCalled = true;
@@ -1767,6 +1841,7 @@ class WebpackCLI implements IWebpackCLI {
       let commandOperands = operands.slice(1);
 
       if (isKnownCommand(commandToRun)) {
+        // webpack 配置的命令最终会走到这里，然后调用 loadCommandByName 方法
         await loadCommandByName(commandToRun, true);
       } else {
         const isEntrySyntax = fs.existsSync(operand);
@@ -2351,6 +2426,9 @@ class WebpackCLI implements IWebpackCLI {
     return error instanceof ValidationError || error.name === "ValidationError";
   }
 
+  /**
+   * 调用 webpack 方法，真是来回调，，，感觉没太大必要啊，，，
+   */
   async createCompiler(
     options: Partial<WebpackDevServerOptions>,
     callback?: Callback<[Error | undefined, WebpackCLIStats | undefined]>,
