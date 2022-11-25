@@ -1,8 +1,8 @@
-本系列文章是在基于 webpack-cli@4.10.0 的基础上研究的，对应的 webpack 版本为 webpack@4.26.0，也就是说整体是基于 webpack4 阅读的源码。
+本系列文章基于 webpack-cli@4.10.0，对应的 webpack 版本为 webpack@4.26.0。
 
 ## 获取代码
 
-将 webpack-cli 的官方源码 fork 到自己仓库，然后 clone 下来，基于 master 分支创建一个自己的分支：study-webpack-cli-4。这样方便我在根目录添加 docs 文件夹，添加 docs 文件夹是为了能使用 github pages 功能，让 github 识别到我写的文档，以网页的形式打开。
+将 webpack-cli 的官方源码 fork 到自己仓库，然后 clone 下来，基于 master 分支创建一个自己的分支：study-webpack-cli-4。这样方便在根目录添加 docs 文件夹，添加 docs 文件夹是为了能使用 github pages 功能，让 github 识别到所写的文档，可以以网页的形式打开。
 
 ## 调试方法
 
@@ -61,10 +61,11 @@ webpack-cli 的目录结构比较简单，但是当我们 clone 下来 webpack-c
 
 可以得出工作空间在 package 文件夹下，打开之后才能看到我们所需要的源码，其中不止包括了 webpack-cli，还有 serve，info 等几个 npm 包：
 
-webpack-cli
-- packages
-  + configtest
-  + generators ------ 生成 webpack 需要的各种模板，比如 loader 模板，plugin 模板
-  + info ------------ 显示 webpack 信息
-  + serve ----------- 开启一个本地服务，webpack-dev-serve
-  + webpack-cli ----- webpack-cli 核心代码，主要对命令行各种命令进行处理，从而调用 webpack 各种方法处理打包过程
+```tree
+packages
+├── configtest
+├── generators ------ 生成 webpack 需要的各种模板，比如 loader 模板，plugin 模板
+├── info ------------ 显示 webpack 信息
+├── serve ----------- 开启一个本地服务，webpack-dev-serve
+└── webpack-cli ----- webpack-cli 核心代码，主要对命令行各种命令进行处理，从而调用 webpack 各种方法处理打包过程
+```

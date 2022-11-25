@@ -63,6 +63,8 @@ createColors(useColor?: boolean): WebpackCLIColors {
 
 ## getLogger
 
+可以看出该方法只是对 `console` 下的几个打印方法做了美化封装，底层调用 this.color 的格式化输出。
+
 ```javascript
 getLogger(): WebpackCLILogger {
     return {
@@ -76,7 +78,112 @@ getLogger(): WebpackCLILogger {
   }
 ```
 
-可以看出该方法只是对 `console` 下的几个打印方法做了美化封装，底层调用 this.color 的格式化输出。
+## makeCommand
+
+makeCommand 主要对命令进行处理，将原来配置的命令描述，命令别名等注册到 `this.command` 中，最后返回组装好的 `command`。
+
+由代码最后 `command.action(action)` 可看出，最终是将参数中的第三个参数作为 action 注册进了命令中，所以最终还是要执行传入的这个 action。
+
+```javascript
+ /**
+   * 组合命令，主要调用 commander 的方法组合命令
+   * @see https://github.com/tj/commander.js/blob/HEAD/Readme_zh-CN.md
+   * @param  {WebpackCLIOptions}        commandOptions 配置好的命令格式
+   * @param  {WebpackCLICommandOptions} options        命令选项
+   * @param  {CommandAction}            action         action 详情可见 commander 怎么注册 action
+   */
+async makeCommand(
+  commandOptions: WebpackCLIOptions,
+  options: WebpackCLICommandOptions,
+  action: CommandAction,
+  ): Promise<WebpackCLICommand | undefined> {
+  // 加载命令
+  const command = this.program.command(commandOptions.name, {
+    noHelp: commandOptions.noHelp,
+    hidden: commandOptions.hidden,
+    isDefault: commandOptions.isDefault,
+  }) as WebpackCLICommand;
+
+  if (commandOptions.description) {
+    command.description(commandOptions.description, commandOptions.argsDescription);
+  }
+
+  if (commandOptions.usage) {
+    command.usage(commandOptions.usage);
+  }
+
+  if (Array.isArray(commandOptions.alias)) {
+    command.aliases(commandOptions.alias);
+  } else {
+    command.alias(commandOptions.alias as string);
+  }
+
+  if (commandOptions.pkg) {
+    command.pkg = commandOptions.pkg;
+  } else {
+    command.pkg = "webpack-cli";
+  }
+
+  const { forHelp } = this.program;
+
+  let allDependenciesInstalled = true;
+
+  // 判断命令中是否有依赖，如果有依赖，判断 package.json中是否安装了这些依赖
+  if (commandOptions.dependencies && commandOptions.dependencies.length > 0) {
+    for (const dependency of commandOptions.dependencies) {
+     // other code ...
+
+      await this.doInstall(dependency, {
+        preMessage: () => {
+          this.logger.error(
+            `For using '${this.colors.green(
+              commandOptions.name.split(" ")[0],
+              )}' command you need to install: '${this.colors.green(dependency)}' package.`,
+            );
+        },
+      });
+    }
+  }
+
+  // 对 option 进行处理
+  if (options) {
+    if (typeof options === "function") {
+      if (forHelp && !allDependenciesInstalled && commandOptions.dependencies) {
+        command.description(
+          `${
+            commandOptions.description
+          } To see all available options you need to install ${commandOptions.dependencies
+          .map((dependency) => `'${dependency}'`)
+          .join(", ")}.`,
+          );
+        options = [];
+      } else {
+        options = await options();
+      }
+    }
+
+    options.forEach((optionForCommand) => {
+      this.makeOption(command, optionForCommand);
+    });
+  }
+
+  command.action(action);
+
+  return command;
+}
+```
+
+## makeOption
+
+该函数是对参数进行处理，通过调用 commander 的 addOption 方法将参数一个个地添加到对应命令上。
+
+```javascript
+makeOption(command: WebpackCLICommand, option: WebpackCLIBuiltInOption) {
+  //other code ...
+  command.addOption(optionForCommand);
+  //other code ...
+}
+```
 
 ## run
 
@@ -263,14 +370,12 @@ const isGlobalOption = (value: string) =>
 
 这是一个非常重要的函数，它的具体功能就是根据命令行输入的命令调用不同的方法处理。
 
-
 由以下代码可以看出，`loadCommandByName` 主要干了这些事情：
 
 1. 判断如果是 build 命令或者 watch 命令，调用 `this.makeCommand()` 方法；
 2. 判断如果是 help 命令，调用 `this.makeCommand()` 方法；
 3. 判断如果是 version 命令，调用 `this.makeCommand()` 方法；
 4. 如果不是以上四个内部命令，那就有可能是外部命令，根据 `externalBuiltInCommandsInfo` 判断是否为外部命令，如果是外部命令，就安装 pkg 代表的依赖包，然后加载执行命令。
-
 
 ```javascript
 const loadCommandByName = async (
@@ -291,6 +396,7 @@ const loadCommandByName = async (
          // 加载 webpack 包
          this.webpack = await this.loadWebpack();
 
+         // 获取命令对应参数，作为 this.makeCommand 的第二个参数传入
          return isWatchCommandUsed
          ? this.getBuiltInOptions().filter((option) => option.name !== "watch")
          : this.getBuiltInOptions();
@@ -300,6 +406,7 @@ const loadCommandByName = async (
            options.entry = [...entries, ...(options.entry || [])];
          }
 
+         // 这里是 this.makeCommand 的第三个参数，为命令的处理函数，所以 build 命令这里是 runWebpack 方法
          await this.runWebpack(options, isWatchCommandUsed);
        },
        );
@@ -314,7 +421,7 @@ const loadCommandByName = async (
          // eslint-disable-next-line @typescript-eslint/no-empty-function
      this.makeCommand(versionCommandOptions, [], () => {});
    } else {
-    // 判断是否配置在外部命令里 
+    // 判断是否配置在外部命令里
      const builtInExternalCommandInfo = externalBuiltInCommandsInfo.find(
        (externalBuiltInCommandInfo) =>
        getCommandName(externalBuiltInCommandInfo.name) === commandName ||
@@ -374,6 +481,239 @@ const loadCommandByName = async (
    }
 };
 ```
+
+### exitOverride
+
+该方法是 commander 包提供的方法，用来重写程序异常退出的 code 码。
+
+```javascript
+// Register own exit
+this.program.exitOverride(async (error) => {
+  if (error.exitCode === 0) {
+    process.exit(0);
+  }
+
+  if (error.code === "executeSubCommandAsync") {
+    process.exit(2);
+  }
+
+  if (error.code === "commander.help") {
+    process.exit(0);
+  }
+
+  if (error.code === "commander.unknownOption") {
+    // other code ...
+
+    process.exit(2);
+  });
+```
+
+### 注册 --color 和 --no-color 全局参数
+
+这段代码用来注册全局 --color 和 --no-color 全局参数，其底层也是用到了 commander 包的 option 方法。
+
+```javascript
+// Default `--color` and `--no-color` options
+// eslint-disable-next-line @typescript-eslint/no-this-alias
+const cli: IWebpackCLI = this;
+this.program.option("--color", "Enable colors on console.");
+this.program.on("option:color", function () {
+// @ts-expect-error shadowing 'this' is intended
+const { color } = this.opts();
+
+cli.isColorSupportChanged = color;
+cli.colors = cli.createColors(color);
+});
+this.program.option("--no-color", "Disable colors on console.");
+this.program.on("option:no-color", function () {
+// @ts-expect-error shadowing 'this' is intended
+const { color } = this.opts();
+
+cli.isColorSupportChanged = color;
+cli.colors = cli.createColors(color);});
+```
+
+### 注册 -v 和 --version 全局参数
+
+这里用来注册 --version 和 -v 全局参数，依然调用 commander 的 option 方法，其中 `outPutVersion` 中的核心代码如下：
+
+1. 加载当前项目 package.json 文件，获取其中的 name 和 version 属性；
+2. 调用 `this.logger.raw()` 格式化输出
+3. 除了输出 webpack-cli 的版本，它还会输出 webpack 包的版本
+
+```javascript
+const outputVersion = async (options: string[]) => {
+  // other code ...
+  try {
+    const { name, version } = this.loadJSONFile<BasicPackageJsonContent>(
+      `${foundCommand.pkg}/package.json`,
+      );
+
+    this.logger.raw(`${name} ${version}`);
+  } catch (e) {
+    this.logger.error(`Error: External package '${foundCommand.pkg}' not found`);
+    process.exit(2);
+  }
+}
+
+this.program.option(
+  "-v, --version",
+  "Output the version number of 'webpack', 'webpack-cli' and 'webpack-dev-server' and commands.",
+);
+```
+
+### 注册 -h 和 --help 全局参数
+
+这里与注册 --version 命令逻辑类似，都是调用 commander 包的 options 方法。
+
+```javascript
+ const outputHelp = async () => {
+  // other code ...
+ }
+
+ this.program.option("-h, --help [verbose]", "Display help for commands and options.");
+```
+
+### action
+
+解析命令行命令，同时调用不同的方法对命令进行处理。
+
+1. 先确定当前运行的命令 operand，如果找不到，默认是 build 命令；
+2. 判断是否有 help 参数，如果有，调用 `outputHelp()` 方法；
+3. 判断是否有 version 参数，如果有，调用 `outputVersion()` 方法；
+4. 判断是否为已知命令，即项目中配置的内部命令和外部命令，如果是，调用 `loadCommandByName()` 处理；
+5. 处理其他命令。
+
+```javascript
+this.program.action(async (options, program: WebpackCLICommand) => {
+  // Command and options
+  const { operands, unknown } = this.program.parseOptions(program.args);
+  const defaultCommandToRun = getCommandName(buildCommandOptions.name);
+  const hasOperand = typeof operands[0] !== "undefined";
+  // 这里可以看出如果 operands 不存在，默认是 build 命令
+  const operand = hasOperand ? operands[0] : defaultCommandToRun;
+  const isHelpOption = typeof options.help !== "undefined";
+  const isHelpCommandSyntax = isCommand(operand, helpCommandOptions);
+
+  // 如果是 help 参数
+  if (isHelpOption || isHelpCommandSyntax) {
+    // code ...
+
+    await outputHelp(optionsForHelp, isVerbose, isHelpCommandSyntax, program);
+  }
+
+  const isVersionOption = typeof options.version !== "undefined";
+  const isVersionCommandSyntax = isCommand(operand, versionCommandOptions);
+
+  // 如果是 version 参数
+  if (isVersionOption || isVersionCommandSyntax) {
+    // code ...
+
+    await outputVersion(optionsForVersion);
+  }
+
+  // 这里默认是 build 命令
+  let commandToRun = operand;
+  let commandOperands = operands.slice(1);
+
+  if (isKnownCommand(commandToRun)) {
+    // webpack 配置的命令最终会走到这里，然后调用 loadCommandByName 方法
+    await loadCommandByName(commandToRun, true);
+  } else {
+    // 对未知命令进行处理 ...
+
+    this.logger.error("Run 'webpack --help' to see available commands and options");
+    process.exit(2);
+  }
+
+  await this.program.parseAsync([commandToRun, ...commandOperands, ...unknown], {
+    from: "user",
+  });
+});
+```
+
+### parseAsync
+
+前边都是铺垫，最后要解析命令行命令和参数，只有这里开始解析，才会调用 `this.command.action()` 处理命令。
+
+```javascript
+await this.program.parseAsync(args, parseOptions);
+```
+
+## createCompiler
+
+该函数的核心在于 try 内部的 `compiler = this.webpack()`，在调用 `this.makeCommand()` 时，第二个参数中执行了 `this.webpack = await this.loadWebpack();`，所以这里 `this.webpack` 就相当于 webpack 包的主体，这里是引用了 webpack 包，通过函数调用的方式将参数传给 webpack 从而来开启 webpack 打包进程。
+
+```javascript
+/**
+   * 调用 webpack 方法，真是来回调
+   */
+async createCompiler(
+  options: Partial<WebpackDevServerOptions>,
+  callback?: Callback<[Error | undefined, WebpackCLIStats | undefined]>,
+  ): Promise<WebpackCompiler> {
+
+  let config = await this.loadConfig(options);
+  config = await this.buildConfig(config, options);
+
+  let compiler: WebpackCompiler;
+  try {
+    compiler = this.webpack(
+      config.options as WebpackConfiguration,
+      callback
+      ? (error, stats) => {
+        callback(error, stats);
+      }
+      : callback,
+      );
+      // @ts-expect-error error type assertion
+  } catch (error: Error) {
+    process.exit(2);
+  }
+
+  if (compiler && (compiler as WebpackV4Compiler).compiler) {
+    compiler = (compiler as WebpackV4Compiler).compiler;
+  }
+
+  return compiler;
+}
+```
+
+
+## runWebpack
+
+该函数是 build，watch 命令的对应方法，核心逻辑是调用 `this.createCompiler()` 方法生成一个 compiler，如果是 watch 命令，再对 compiler 对象进行监听。
+
+```javascript
+async runWebpack(options: WebpackRunOptions, isWatchCommand: boolean): Promise<void> {
+  const callback = (error: Error | undefined, stats: WebpackCLIStats | undefined): void => {
+    // code ...
+  };
+
+  // 创建 compiler 对象
+  compiler = await this.createCompiler(options as WebpackDevServerOptions, callback);
+
+  if (!compiler) {
+    return;
+  }
+
+  // 处理 watch 命令
+  const isWatch = (compiler: WebpackCompiler): boolean =>
+  Boolean(
+    this.isMultipleCompiler(compiler)
+    ? compiler.compilers.some((compiler) => compiler.options.watch)
+    : compiler.options.watch,
+    );
+
+  if (isWatch(compiler) && this.needWatchStdin(compiler)) {
+    process.stdin.on("end", () => {
+      process.exit(0);
+    });
+    process.stdin.resume();
+  }
+}
+```
+
 
 
 ## other
