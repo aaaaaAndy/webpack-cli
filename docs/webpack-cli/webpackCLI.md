@@ -1,4 +1,4 @@
-webpackCLI 类是 webpack-cli 包的核心文件，大部分功能都在改文件中实现。
+webpackCLI 类是 webpack-cli 包的核心文件，大部分功能都在该文件中实现。
 
 ```javascript
 class WebpackCLI implements IWebpackCLI {
@@ -8,7 +8,7 @@ class WebpackCLI implements IWebpackCLI {
 }
 ```
 
-在 bootstrap 文件中，实例化了 WebpackCLI 类，并调用了其 run 方法，所以 WebpackCLI 类也正如以上代码所示。
+在 bootstrap 文件中，实例化了 WebpackCLI 类，并调用了其 run 方法，所以 WebpackCLI 类也正如以上代码所示，存在一个 run 方法。
 
 ## constructor
 
@@ -31,11 +31,9 @@ constructor() {
   }
 ```
 
-`this.color`：是为了美化命令行，对齐输出添加背景字体颜色等设置。
-
-`this.logger`：是对 `console` 下几个输出方法的二次封装。
-
-`this.program`：需要注意的是这里引用了 `commander` 依赖包，该 npm 包是对命令行命令，参数等进行处理，详细可以参考 [https://www.npmjs.com/package/commander](https://www.npmjs.com/package/commander)
+- `this.color`：是为了美化命令行，对齐输出添加背景字体颜色等设置，通过引入 [colorette](https://www.npmjs.com/package/colorette) 包来实现。
+- `this.logger`：是对 `console` 下几个输出方法的二次封装。
+- `this.program`：对命令行命令，参数等进行处理，这里引用了 [commander](https://www.npmjs.com/package/commander) 包
 
 ## createColors
 
@@ -45,6 +43,7 @@ createColors(useColor?: boolean): WebpackCLIColors {
 
   let shouldUseColor;
 
+  // useColor 参数用来确认是否覆盖命令行原有的色值
   if (useColor) {
     shouldUseColor = useColor;
   } else {
@@ -55,7 +54,7 @@ createColors(useColor?: boolean): WebpackCLIColors {
 }
 ```
 
-该方法主要继承 colorette 包，用来对命令行进行格式化输出，比如加字体颜色，背景颜色，字体加粗，斜体等，具体可参考：[https://www.npmjs.com/package/colorette](https://www.npmjs.com/package/colorette)
+该方法主要继承 colorette 包，用来对命令行进行格式化输出，比如加字体颜色，背景颜色，字体加粗，斜体等，具体可参考：[colorette](https://www.npmjs.com/package/colorette)
 
 最终得到的 `this.color` 如下图所示：
 
@@ -67,121 +66,14 @@ createColors(useColor?: boolean): WebpackCLIColors {
 
 ```javascript
 getLogger(): WebpackCLILogger {
-    return {
-      error: (val) => console.error(`[webpack-cli] ${this.colors.red(util.format(val))}`),
-      warn: (val) => console.warn(`[webpack-cli] ${this.colors.yellow(val)}`),
-      info: (val) => console.info(`[webpack-cli] ${this.colors.cyan(val)}`),
-      success: (val) => console.log(`[webpack-cli] ${this.colors.green(val)}`),
-      log: (val) => console.log(`[webpack-cli] ${val}`),
-      raw: (val) => console.log(val),
-    };
-  }
-```
-
-## makeCommand
-
-makeCommand 主要对命令进行处理，将原来配置的命令描述，命令别名等注册到 `this.command` 中，最后返回组装好的 `command`。
-
-由代码最后 `command.action(action)` 可看出，最终是将参数中的第三个参数作为 action 注册进了命令中，所以最终还是要执行传入的这个 action。
-
-```javascript
- /**
-   * 组合命令，主要调用 commander 的方法组合命令
-   * @see https://github.com/tj/commander.js/blob/HEAD/Readme_zh-CN.md
-   * @param  {WebpackCLIOptions}        commandOptions 配置好的命令格式
-   * @param  {WebpackCLICommandOptions} options        命令选项
-   * @param  {CommandAction}            action         action 详情可见 commander 怎么注册 action
-   */
-async makeCommand(
-  commandOptions: WebpackCLIOptions,
-  options: WebpackCLICommandOptions,
-  action: CommandAction,
-  ): Promise<WebpackCLICommand | undefined> {
-  // 加载命令
-  const command = this.program.command(commandOptions.name, {
-    noHelp: commandOptions.noHelp,
-    hidden: commandOptions.hidden,
-    isDefault: commandOptions.isDefault,
-  }) as WebpackCLICommand;
-
-  if (commandOptions.description) {
-    command.description(commandOptions.description, commandOptions.argsDescription);
-  }
-
-  if (commandOptions.usage) {
-    command.usage(commandOptions.usage);
-  }
-
-  if (Array.isArray(commandOptions.alias)) {
-    command.aliases(commandOptions.alias);
-  } else {
-    command.alias(commandOptions.alias as string);
-  }
-
-  if (commandOptions.pkg) {
-    command.pkg = commandOptions.pkg;
-  } else {
-    command.pkg = "webpack-cli";
-  }
-
-  const { forHelp } = this.program;
-
-  let allDependenciesInstalled = true;
-
-  // 判断命令中是否有依赖，如果有依赖，判断 package.json中是否安装了这些依赖
-  if (commandOptions.dependencies && commandOptions.dependencies.length > 0) {
-    for (const dependency of commandOptions.dependencies) {
-     // other code ...
-
-      await this.doInstall(dependency, {
-        preMessage: () => {
-          this.logger.error(
-            `For using '${this.colors.green(
-              commandOptions.name.split(" ")[0],
-              )}' command you need to install: '${this.colors.green(dependency)}' package.`,
-            );
-        },
-      });
-    }
-  }
-
-  // 对 option 进行处理
-  if (options) {
-    if (typeof options === "function") {
-      if (forHelp && !allDependenciesInstalled && commandOptions.dependencies) {
-        command.description(
-          `${
-            commandOptions.description
-          } To see all available options you need to install ${commandOptions.dependencies
-          .map((dependency) => `'${dependency}'`)
-          .join(", ")}.`,
-          );
-        options = [];
-      } else {
-        options = await options();
-      }
-    }
-
-    options.forEach((optionForCommand) => {
-      this.makeOption(command, optionForCommand);
-    });
-  }
-
-  command.action(action);
-
-  return command;
-}
-```
-
-## makeOption
-
-该函数是对参数进行处理，通过调用 commander 的 addOption 方法将参数一个个地添加到对应命令上。
-
-```javascript
-makeOption(command: WebpackCLICommand, option: WebpackCLIBuiltInOption) {
-  //other code ...
-  command.addOption(optionForCommand);
-  //other code ...
+  return {
+    error: (val) => console.error(`[webpack-cli] ${this.colors.red(util.format(val))}`),
+    warn: (val) => console.warn(`[webpack-cli] ${this.colors.yellow(val)}`),
+    info: (val) => console.info(`[webpack-cli] ${this.colors.cyan(val)}`),
+    success: (val) => console.log(`[webpack-cli] ${this.colors.green(val)}`),
+    log: (val) => console.log(`[webpack-cli] ${val}`),
+    raw: (val) => console.log(val),
+  };
 }
 ```
 
@@ -276,7 +168,7 @@ const externalBuiltInCommandsInfo = [
 
 #### knownCommands
 
-`knownCommands` 定义项目中的已知命令，commander 读取到命令后可以根据 `knownCommands` 来判断 webpack-cli 是否支持此命令。
+`knownCommands` 定义项目中的已知命令，是 [内部命令](#内部命令) 和 [外部命令](#外部命令) 的总和，commander 读取到命令后可以根据 `knownCommands` 来判断 webpack-cli 是否支持此命令。
 
 ```javascript
 const knownCommands = [
@@ -299,6 +191,7 @@ const getCommandName = (name: string) => name.split(" ")[0];
 ### isKnownCommand
 
 对比命令行获取的 name 和 knownCommands 中已经声明的命令来判断是否为 webpack-cli 支持的命令。
+
 
 ```javascript
 const isKnownCommand = (name: string) =>
@@ -533,27 +426,46 @@ cli.isColorSupportChanged = color;
 cli.colors = cli.createColors(color);});
 ```
 
+--color 参数定义的 webpack 输出带有颜色的命令行输出，--no-color 则是不带颜色的命令行输出，如下所示：
+![color](https://raw.githubusercontent.com/aaaaaAndy/picture/main/images/20221128141446.png)
+
 ### 注册 -v 和 --version 全局参数
 
 这里用来注册 --version 和 -v 全局参数，依然调用 commander 的 option 方法，其中 `outPutVersion` 中的核心代码如下：
 
 1. 加载当前项目 package.json 文件，获取其中的 name 和 version 属性；
-2. 调用 `this.logger.raw()` 格式化输出
-3. 除了输出 webpack-cli 的版本，它还会输出 webpack 包的版本
+2. 调用 `this.logger.raw()` 格式化输出；
 
 ```javascript
 const outputVersion = async (options: string[]) => {
   // other code ...
   try {
-    const { name, version } = this.loadJSONFile<BasicPackageJsonContent>(
-      `${foundCommand.pkg}/package.json`,
-      );
-
-    this.logger.raw(`${name} ${version}`);
-  } catch (e) {
-    this.logger.error(`Error: External package '${foundCommand.pkg}' not found`);
-    process.exit(2);
+    webpack = await this.loadWebpack(false);
+  } catch (_error) {
+        // Nothing
   }
+
+  // 输出 webpack version
+  this.logger.raw(`webpack: ${webpack ? webpack.version : "not installed"}`);
+
+  const pkgJSON = this.loadJSONFile<BasicPackageJsonContent>("../package.json");
+
+  // 输出 webpack-cli version
+  this.logger.raw(`webpack-cli: ${pkgJSON.version}`);
+
+  let devServer;
+
+  try {
+    devServer = await this.loadJSONFile<BasicPackageJsonContent>(
+      "webpack-dev-server/package.json",
+      false,
+      );
+  } catch (_error) {
+        // Nothing
+  }
+
+  // 输出 webpack-dev-server version
+  this.logger.raw(`webpack-dev-server ${devServer ? devServer.version : "not installed"}`);
 }
 
 this.program.option(
@@ -561,6 +473,9 @@ this.program.option(
   "Output the version number of 'webpack', 'webpack-cli' and 'webpack-dev-server' and commands.",
 );
 ```
+
+这里一共会输出三个包的 version，分别是：webpack、webpack-cli、webpack-dev-server，结果如下：
+![version](https://raw.githubusercontent.com/aaaaaAndy/picture/main/images/20221128140452.png)
 
 ### 注册 -h 和 --help 全局参数
 
@@ -640,45 +555,112 @@ this.program.action(async (options, program: WebpackCLICommand) => {
 await this.program.parseAsync(args, parseOptions);
 ```
 
-## createCompiler
+## makeCommand
 
-该函数的核心在于 try 内部的 `compiler = this.webpack()`，在调用 `this.makeCommand()` 时，第二个参数中执行了 `this.webpack = await this.loadWebpack();`，所以这里 `this.webpack` 就相当于 webpack 包的主体，这里是引用了 webpack 包，通过函数调用的方式将参数传给 webpack 从而来开启 webpack 打包进程。
+makeCommand 主要对命令进行处理，将原来配置的命令描述，命令别名等注册到 `this.command` 中，最后返回组装好的 `command`。
+
+由代码最后 `command.action(action)` 可看出，最终是将参数中的第三个参数作为 action 注册进了命令中，所以最终还是要执行传入的这个 action。
 
 ```javascript
-/**
-   * 调用 webpack 方法，真是来回调
+ /**
+   * 组合命令，主要调用 commander 的方法组合命令
+   * @see https://github.com/tj/commander.js/blob/HEAD/Readme_zh-CN.md
+   * @param  {WebpackCLIOptions}        commandOptions 配置好的命令格式
+   * @param  {WebpackCLICommandOptions} options        命令选项
+   * @param  {CommandAction}            action         action 详情可见 commander 怎么注册 action
    */
-async createCompiler(
-  options: Partial<WebpackDevServerOptions>,
-  callback?: Callback<[Error | undefined, WebpackCLIStats | undefined]>,
-  ): Promise<WebpackCompiler> {
+async makeCommand(
+  commandOptions: WebpackCLIOptions,
+  options: WebpackCLICommandOptions,
+  action: CommandAction,
+  ): Promise<WebpackCLICommand | undefined> {
+  // 加载命令
+  const command = this.program.command(commandOptions.name, {
+    noHelp: commandOptions.noHelp,
+    hidden: commandOptions.hidden,
+    isDefault: commandOptions.isDefault,
+  }) as WebpackCLICommand;
 
-  let config = await this.loadConfig(options);
-  config = await this.buildConfig(config, options);
+  if (commandOptions.description) {
+    command.description(commandOptions.description, commandOptions.argsDescription);
+  }
 
-  let compiler: WebpackCompiler;
-  try {
-    compiler = this.webpack(
-      config.options as WebpackConfiguration,
-      callback
-      ? (error, stats) => {
-        callback(error, stats);
+  if (commandOptions.usage) {
+    command.usage(commandOptions.usage);
+  }
+
+  if (Array.isArray(commandOptions.alias)) {
+    command.aliases(commandOptions.alias);
+  } else {
+    command.alias(commandOptions.alias as string);
+  }
+
+  if (commandOptions.pkg) {
+    command.pkg = commandOptions.pkg;
+  } else {
+    command.pkg = "webpack-cli";
+  }
+
+  const { forHelp } = this.program;
+
+  let allDependenciesInstalled = true;
+
+  // 判断命令中是否有依赖，如果有依赖，判断 package.json中是否安装了这些依赖
+  if (commandOptions.dependencies && commandOptions.dependencies.length > 0) {
+    for (const dependency of commandOptions.dependencies) {
+     // other code ...
+
+      await this.doInstall(dependency, {
+        preMessage: () => {
+          this.logger.error(
+            `For using '${this.colors.green(
+              commandOptions.name.split(" ")[0],
+              )}' command you need to install: '${this.colors.green(dependency)}' package.`,
+            );
+        },
+      });
+    }
+  }
+
+  // 对 option 进行处理
+  if (options) {
+    if (typeof options === "function") {
+      if (forHelp && !allDependenciesInstalled && commandOptions.dependencies) {
+        command.description(
+          `${
+            commandOptions.description
+          } To see all available options you need to install ${commandOptions.dependencies
+          .map((dependency) => `'${dependency}'`)
+          .join(", ")}.`,
+          );
+        options = [];
+      } else {
+        options = await options();
       }
-      : callback,
-      );
-      // @ts-expect-error error type assertion
-  } catch (error: Error) {
-    process.exit(2);
+    }
+
+    options.forEach((optionForCommand) => {
+      this.makeOption(command, optionForCommand);
+    });
   }
 
-  if (compiler && (compiler as WebpackV4Compiler).compiler) {
-    compiler = (compiler as WebpackV4Compiler).compiler;
-  }
+  command.action(action);
 
-  return compiler;
+  return command;
 }
 ```
 
+## makeOption
+
+该函数是对参数进行处理，通过调用 commander 的 addOption 方法将参数一个个地添加到对应命令上。
+
+```javascript
+makeOption(command: WebpackCLICommand, option: WebpackCLIBuiltInOption) {
+  //other code ...
+  command.addOption(optionForCommand);
+  //other code ...
+}
+```
 
 ## runWebpack
 
@@ -714,6 +696,432 @@ async runWebpack(options: WebpackRunOptions, isWatchCommand: boolean): Promise<v
 }
 ```
 
+## createCompiler
+
+该函数的核心在于 try 内部的 `compiler = this.webpack()`，在调用 `this.makeCommand()` 时，第二个参数中执行了 `this.webpack = await this.loadWebpack();`，所以这里 `this.webpack` 就相当于 webpack 包的主体，这里是引用了 webpack 包，通过函数调用的方式将参数传给 webpack 从而来开启 webpack 打包进程。
+
+```javascript
+/**
+   * 调用 webpack 方法，真是来回调
+   */
+async createCompiler(
+  options: Partial<WebpackDevServerOptions>,
+  callback?: Callback<[Error | undefined, WebpackCLIStats | undefined]>,
+  ): Promise<WebpackCompiler> {
+
+  let config = await this.loadConfig(options);
+  config = await this.buildConfig(config, options);
+
+  let compiler: WebpackCompiler;
+  try {
+    // 调用 webpack 函数
+    // 后续流程就要去 webpack 包看源码了
+    compiler = this.webpack(
+      config.options as WebpackConfiguration,
+      callback
+      ? (error, stats) => {
+        callback(error, stats);
+      }
+      : callback,
+      );
+      // @ts-expect-error error type assertion
+  } catch (error: Error) {
+    process.exit(2);
+  }
+
+  if (compiler && (compiler as WebpackV4Compiler).compiler) {
+    compiler = (compiler as WebpackV4Compiler).compiler;
+  }
+
+  return compiler;
+}
+```
+
+## loadConfig
+
+该方法加载配置文件中的配置，如果没有指定配置文件日志，就从默认配置文件地址中取。
+
+```javascript
+/**
+  * 加载本地 webpack 配置文件中的配置
+  */
+async loadConfig(options: Partial<WebpackDevServerOptions>) {
+  const interpret = require("interpret");
+  const loadConfigByPath = async (configPath: string, argv: Argv = {}) => {
+    try {
+      options = await this.tryRequireThenImport<LoadConfigOption | LoadConfigOption[]>(
+        configPath,
+        false,
+        );
+        // @ts-expect-error error type assertion
+    } catch (error: Error) {
+      // other code ...
+    }
+
+    // other code ... 
+
+    return { options, path: configPath };
+  };
+
+  const config: WebpackCLIConfig = {
+    options: {} as WebpackConfiguration,
+    path: new WeakMap(),
+  };
+
+    // 如果单独配置了 webpack 的配置文件
+  if (options.config && options.config.length > 0) {
+    const loadedConfigs = await Promise.all(
+      options.config.map((configPath: string) =>
+        loadConfigByPath(path.resolve(configPath), options.argv),
+        ),
+      );
+
+    config.options = [];
+
+    loadedConfigs.forEach((loadedConfig) => {
+      // other code ...
+    });
+
+    config.options = config.options.length === 1 ? config.options[0] : config.options;
+  } else {
+    // Order defines the priority, in decreasing order
+    // 如果没有单独配置 webpack 配置文件，那么久走 webpack 默认配置文件
+    const defaultConfigFiles = [
+      "webpack.config",
+      ".webpack/webpack.config",
+      ".webpack/webpackfile",
+      ]
+
+    let foundDefaultConfigFile;
+
+    if (foundDefaultConfigFile) {
+      //  加载默认配置文件
+      const loadedConfig = await loadConfigByPath(foundDefaultConfigFile.path, options.argv);
+
+      // other code ...
+    }
+  }
+
+  if (options.configName) {
+    // 判断所需属性是否都存在 
+  }
+
+  if (options.merge) {
+    const merge = await this.tryRequireThenImport<typeof webpackMerge>("webpack-merge");
+    // 合并参数 
+  }
+
+  return config;
+}
+```
 
 
-## other
+## buildConfig
+
+对 config 进行处理。
+
+```javascript
+async buildConfig(
+  config: WebpackCLIConfig,
+  options: Partial<WebpackDevServerOptions>,
+  ): Promise<WebpackCLIConfig> {
+  // 执行函数
+  const runFunctionOnEachConfig = (
+    options: ConfigOptions | ConfigOptions[],
+    fn: CallableFunction,
+    ) => {
+    if (Array.isArray(options)) {
+      for (let item of options) {
+        item = fn(item);
+      }
+    } else {
+      options = fn(options);
+    }
+
+    return options;
+  };
+
+  // 如果有 analyze 参数，则校验引入 webpack-bundle-analyzer 包
+  if (options.analyze) {
+    if (!this.checkPackageExists("webpack-bundle-analyzer")) {
+      await this.doInstall("webpack-bundle-analyzer", {
+        preMessage: () => {
+          this.logger.error(
+            `It looks like ${this.colors.yellow("webpack-bundle-analyzer")} is not installed.`,
+            );
+        },
+      });
+
+      this.logger.success(
+        `${this.colors.yellow("webpack-bundle-analyzer")} was installed successfully.`,
+        );
+    }
+  }
+
+  if (typeof options.progress === "string" && options.progress !== "profile") {
+    this.logger.error(
+      `'${options.progress}' is an invalid value for the --progress option. Only 'profile' is allowed.`,
+      );
+    process.exit(2);
+  }
+
+  if (typeof options.hot === "string" && options.hot !== "only") {
+    this.logger.error(
+      `'${options.hot}' is an invalid value for the --hot option. Use 'only' instead.`,
+      );
+    process.exit(2);
+  }
+
+  const CLIPlugin = await this.tryRequireThenImport<
+  Instantiable<CLIPluginClass, [CLIPluginOptions]>
+  >("./plugins/CLIPlugin");
+
+  const internalBuildConfig = (item: WebpackConfiguration) => {
+      // Output warnings
+    if (
+      item.watch &&
+      options.argv &&
+      options.argv.env &&
+      (options.argv.env["WEBPACK_WATCH"] || options.argv.env["WEBPACK_SERVE"])
+      ) {
+      this.logger.warn(
+        `No need to use the '${
+          options.argv.env["WEBPACK_WATCH"] ? "watch" : "serve"
+        }' command together with '{ watch: true }' configuration, it does not make sense.`,
+        );
+
+    if (options.argv.env["WEBPACK_SERVE"]) {
+      item.watch = false;
+    }
+  }
+
+      // Apply options
+  if (this.webpack.cli) {
+    const args: Record<string, Argument> = this.getBuiltInOptions()
+    .filter((flag) => flag.group === "core")
+    .reduce((accumulator: Record<string, Argument>, flag) => {
+      accumulator[flag.name] = flag as unknown as Argument;
+      return accumulator;
+    }, {});
+
+    const values: ProcessedArguments = Object.keys(options).reduce(
+      (accumulator: ProcessedArguments, name) => {
+        if (name === "argv") {
+          return accumulator;
+        }
+
+        const kebabName = this.toKebabCase(name);
+
+        if (args[kebabName]) {
+          accumulator[kebabName] = options[name as keyof typeof options as string];
+        }
+
+        return accumulator;
+      },
+      {},
+      );
+
+    const problems: Problem[] | null = this.webpack.cli.processArguments(args, item, values);
+
+    if (problems) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const groupBy = (xs: Record<string, any>[], key: string) => {
+        return xs.reduce((rv, x) => {
+          (rv[x[key]] = rv[x[key]] || []).push(x);
+
+          return rv;
+        }, {});
+      };
+      const problemsByPath = groupBy(problems, "path");
+
+      for (const path in problemsByPath) {
+        const problems = problemsByPath[path];
+
+        problems.forEach((problem: Problem) => {
+          this.logger.error(
+            `${this.capitalizeFirstLetter(problem.type.replace(/-/g, " "))}${
+              problem.value ? ` '${problem.value}'` : ""
+            } for the '--${problem.argument}' option${
+              problem.index ? ` by index '${problem.index}'` : ""
+            }`,
+            );
+
+          if (problem.expected) {
+            this.logger.error(`Expected: '${problem.expected}'`);
+          }
+        });
+      }
+
+      process.exit(2);
+    }
+
+    const isFileSystemCacheOptions = (
+      config: WebpackConfiguration,
+      ): config is FileSystemCacheOptions => {
+      return (
+        Boolean(config.cache) && (config as FileSystemCacheOptions).cache.type === "filesystem"
+        );
+    };
+
+        // Setup default cache options
+    if (isFileSystemCacheOptions(item)) {
+      const configPath = config.path.get(item);
+
+      if (configPath) {
+        if (!item.cache.buildDependencies) {
+          item.cache.buildDependencies = {};
+        }
+
+        if (!item.cache.buildDependencies.defaultConfig) {
+          item.cache.buildDependencies.defaultConfig = [];
+        }
+
+        if (Array.isArray(configPath)) {
+          configPath.forEach((oneOfConfigPath) => {
+            (
+              item.cache.buildDependencies as NonNullable<
+              FileSystemCacheOptions["cache"]["buildDependencies"]
+              >
+              ).defaultConfig.push(oneOfConfigPath);
+          });
+        } else {
+          item.cache.buildDependencies.defaultConfig.push(configPath);
+        }
+      }
+    }
+  }
+
+  // Setup legacy logic for webpack@4
+  // TODO respect `--entry-reset` in th next major release
+  // TODO drop in the next major release
+  if (options.entry) {
+    item.entry = options.entry;
+  }
+
+  if (options.outputPath) {
+    item.output = { ...item.output, ...{ path: path.resolve(options.outputPath) } };
+  }
+
+  if (options.target) {
+    item.target = options.target;
+  }
+
+  if (typeof options.devtool !== "undefined") {
+    item.devtool = options.devtool;
+  }
+
+  if (options.name) {
+    item.name = options.name;
+  }
+
+  if (typeof options.stats !== "undefined") {
+    item.stats = options.stats;
+  }
+
+  if (typeof options.watch !== "undefined") {
+    item.watch = options.watch;
+  }
+
+  if (typeof options.watchOptionsStdin !== "undefined") {
+    item.watchOptions = { ...item.watchOptions, ...{ stdin: options.watchOptionsStdin } };
+  }
+
+  if (options.mode) {
+    item.mode = options.mode;
+  }
+
+      // Respect `process.env.NODE_ENV`
+  if (
+    !item.mode &&
+    process.env &&
+    process.env.NODE_ENV &&
+    (process.env.NODE_ENV === "development" ||
+      process.env.NODE_ENV === "production" ||
+      process.env.NODE_ENV === "none")
+    ) {
+    item.mode = process.env.NODE_ENV;
+}
+
+      // Setup stats
+      // TODO remove after drop webpack@4
+const statsForWebpack4 =
+this.webpack.Stats &&
+(this.webpack.Stats as unknown as Partial<WebpackV4LegacyStats>).presetToOptions;
+
+if (statsForWebpack4) {
+  if (typeof item.stats === "undefined") {
+    item.stats = {};
+  } else if (typeof item.stats === "boolean") {
+    item.stats = (this.webpack.Stats as unknown as WebpackV4LegacyStats).presetToOptions(
+      item.stats,
+      );
+  } else if (
+    typeof item.stats === "string" &&
+    (item.stats === "none" ||
+      item.stats === "verbose" ||
+      item.stats === "detailed" ||
+      item.stats === "normal" ||
+      item.stats === "minimal" ||
+      item.stats === "errors-only" ||
+      item.stats === "errors-warnings")
+    ) {
+    item.stats = (this.webpack.Stats as unknown as WebpackV4LegacyStats).presetToOptions(
+      item.stats,
+      );
+  }
+} else {
+  if (typeof item.stats === "undefined") {
+    item.stats = { preset: "normal" };
+  } else if (typeof item.stats === "boolean") {
+    item.stats = item.stats ? { preset: "normal" } : { preset: "none" };
+  } else if (typeof item.stats === "string") {
+    item.stats = { preset: item.stats };
+  }
+}
+
+let colors;
+
+      // From arguments
+if (typeof this.isColorSupportChanged !== "undefined") {
+  colors = Boolean(this.isColorSupportChanged);
+}
+      // From stats
+else if (typeof (item.stats as StatsOptions).colors !== "undefined") {
+  colors = (item.stats as StatsOptions).colors;
+}
+      // Default
+else {
+  colors = Boolean(this.colors.isColorSupported);
+}
+
+      // TODO remove after drop webpack v4
+if (typeof item.stats === "object" && item.stats !== null) {
+  item.stats.colors = colors;
+}
+
+      // Apply CLI plugin
+if (!item.plugins) {
+  item.plugins = [];
+}
+
+item.plugins.unshift(
+  new CLIPlugin({
+    configPath: config.path.get(item),
+    helpfulOutput: !options.json,
+    hot: options.hot,
+    progress: options.progress,
+    prefetch: options.prefetch,
+    analyze: options.analyze,
+  }),
+  );
+
+return options;
+};
+
+runFunctionOnEachConfig(config.options, internalBuildConfig);
+
+return config;
+}
+
+```
+

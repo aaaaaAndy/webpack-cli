@@ -122,6 +122,7 @@ class WebpackCLI implements IWebpackCLI {
 
     let shouldUseColor;
 
+    // useColor 参数用来确认是否覆盖命令行原有的色值
     if (useColor) {
       shouldUseColor = useColor;
     } else {
@@ -1220,6 +1221,7 @@ class WebpackCLI implements IWebpackCLI {
       // 如果是 build 或者 watch 命令
       if (isBuildCommandUsed || isWatchCommandUsed) {
         // 其实这里用三元运算符不是太合规
+        // this.makeCommand三个参数分别是：命令配置，命令参数，命令 action
         await this.makeCommand(
           isBuildCommandUsed ? buildCommandOptions : watchCommandOptions,
           async () => {
@@ -1249,6 +1251,7 @@ class WebpackCLI implements IWebpackCLI {
         // eslint-disable-next-line @typescript-eslint/no-empty-function
         this.makeCommand(versionCommandOptions, [], () => {});
       } else {
+        // 如果不是build、watch、version、help 命令，则有可能是定义的外呼命令
         const builtInExternalCommandInfo = externalBuiltInCommandsInfo.find(
           (externalBuiltInCommandInfo) =>
             getCommandName(externalBuiltInCommandInfo.name) === commandName ||
@@ -1282,6 +1285,7 @@ class WebpackCLI implements IWebpackCLI {
         let loadedCommand;
 
         try {
+          // 加载对应命令所需的依赖包，其实是引入了一个 class
           loadedCommand = await this.tryRequireThenImport<Instantiable<() => void>>(pkg, false);
         } catch (error) {
           // Ignore, command is not installed
@@ -1292,8 +1296,10 @@ class WebpackCLI implements IWebpackCLI {
         let command;
 
         try {
+          // 初始化引入的 class 命令包
           command = new loadedCommand();
 
+          // 调用实例的 apply 方法
           await command.apply(this);
         } catch (error) {
           this.logger.error(`Unable to load '${pkg}' command`);
@@ -1881,6 +1887,9 @@ class WebpackCLI implements IWebpackCLI {
     await this.program.parseAsync(args, parseOptions);
   }
 
+  /**
+   * 加载本地 webpack 配置文件中的配置
+   */
   async loadConfig(options: Partial<WebpackDevServerOptions>) {
     const interpret = require("interpret");
     const loadConfigByPath = async (configPath: string, argv: Argv = {}) => {
@@ -1979,6 +1988,7 @@ class WebpackCLI implements IWebpackCLI {
       path: new WeakMap(),
     };
 
+    // 如果单独配置了 webpack 的配置文件
     if (options.config && options.config.length > 0) {
       const loadedConfigs = await Promise.all(
         options.config.map((configPath: string) =>
@@ -2020,6 +2030,7 @@ class WebpackCLI implements IWebpackCLI {
       config.options = config.options.length === 1 ? config.options[0] : config.options;
     } else {
       // Order defines the priority, in decreasing order
+      // webpack 默认配置文件
       const defaultConfigFiles = [
         "webpack.config",
         ".webpack/webpack.config",
@@ -2442,6 +2453,8 @@ class WebpackCLI implements IWebpackCLI {
 
     let compiler: WebpackCompiler;
     try {
+      // 调用 webpack 函数，两个参数分别是：参数、回调
+      // 后续流程就要去 webpack 包看源码了
       compiler = this.webpack(
         config.options as WebpackConfiguration,
         callback
@@ -2579,6 +2592,7 @@ class WebpackCLI implements IWebpackCLI {
       options.watch = true;
     }
 
+    // 创建 compiler 对象
     compiler = await this.createCompiler(options as WebpackDevServerOptions, callback);
 
     if (!compiler) {

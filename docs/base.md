@@ -43,7 +43,9 @@ webstorm 调试相对于命令行调试要简单的多，毕竟是集成 IDE。
 
 ### 3. 区别
 
-两种方式都可调试 webpack，webpack-cli 代码，他们有一定的区别，通过命令行调试最终会执行 `./node_modules/webpack/bin/webpack.js` 文件，也会将命令行参数传递给该文件，而通过 webstorm 调试只是以 `./node_modules/webpack/bin/webpack.js` 文件为入口，以 js 的方式执行了该文件，没有命令行的各种参数。
+两种方式都可调试 webpack，webpack-cli 代码，他们有一定的区别：
+1. 通过命令行调试最终会执行 `./node_modules/webpack/bin/webpack.js` 文件，也会将命令行参数传递给该文件;
+2. 通过 webstorm 调试只是以 `./node_modules/webpack/bin/webpack.js` 文件为入口，以 js 的方式执行了该文件，没有命令行的各种参数。
 
 ## 目录结构
 

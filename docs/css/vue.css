@@ -2,6 +2,7 @@
 
 :root {
   --theme-color: #c02c38;
+  --selection-color: #f0c9cf;
   --common-font-color: #1C1E21;
   --common-font-size: 16px;
   --common-font-family: Jetbrains Mono, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans,
@@ -36,6 +37,10 @@ body {
   -webkit-text-size-adjust: none;
   -webkit-touch-callout: none;
   box-sizing: border-box;
+}
+
+*::selection {
+  background-color: var(--selection-color);
 }
 body:not(.ready) {
   overflow: hidden;
@@ -225,9 +230,6 @@ main.hidden {
 }
 .anchor span {
   color: var(--h-title-color);
-}
-.anchor:hover {
-  text-decoration: underline;
 }
 
 /* 侧边栏  */
@@ -700,6 +702,13 @@ body {
   color: var(--h-title-color);
   font-weight: 600;
 }
+.markdown-section h1 > a > span:hover,
+.markdown-section h2 > a > span:hover,
+.markdown-section h3 > a > span:hover,
+.markdown-section h4 > a > span:hover {
+  border-bottom: 2px solid var(--theme-color);
+}
+.markdown-section li > a,
 .markdown-section p > a {
   color: var(--theme-color);
   font-weight: 600;
@@ -762,7 +771,7 @@ body {
 }
 .markdown-section figure,
 .markdown-section p {
-  margin: 1.2em 0;
+  margin: 1rem 0;
 }
 .markdown-section p,
 .markdown-section ul,
@@ -869,7 +878,8 @@ body {
   display: none;
 }
 
-.markdown-section p > code {
+.markdown-section p > code,
+.markdown-section li > code {
   color: #e96900;
   padding: 0 4px 0 2px;
   background-color: #f8f8f8;
