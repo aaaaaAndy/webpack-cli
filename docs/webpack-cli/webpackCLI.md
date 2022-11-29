@@ -192,7 +192,6 @@ const getCommandName = (name: string) => name.split(" ")[0];
 
 对比命令行获取的 name 和 knownCommands 中已经声明的命令来判断是否为 webpack-cli 支持的命令。
 
-
 ```javascript
 const isKnownCommand = (name: string) =>
   knownCommands.find(
@@ -411,19 +410,20 @@ this.program.exitOverride(async (error) => {
 const cli: IWebpackCLI = this;
 this.program.option("--color", "Enable colors on console.");
 this.program.on("option:color", function () {
-// @ts-expect-error shadowing 'this' is intended
-const { color } = this.opts();
+  // @ts-expect-error shadowing 'this' is intended
+  const { color } = this.opts();
 
-cli.isColorSupportChanged = color;
-cli.colors = cli.createColors(color);
+  cli.isColorSupportChanged = color;
+  cli.colors = cli.createColors(color);
 });
 this.program.option("--no-color", "Disable colors on console.");
 this.program.on("option:no-color", function () {
-// @ts-expect-error shadowing 'this' is intended
-const { color } = this.opts();
+  // @ts-expect-error shadowing 'this' is intended
+  const { color } = this.opts();
 
-cli.isColorSupportChanged = color;
-cli.colors = cli.createColors(color);});
+  cli.isColorSupportChanged = color;
+  cli.colors = cli.createColors(color);
+});
 ```
 
 --color 参数定义的 webpack 输出带有颜色的命令行输出，--no-color 则是不带颜色的命令行输出，如下所示：
@@ -482,11 +482,11 @@ this.program.option(
 这里与注册 --version 命令逻辑类似，都是调用 commander 包的 options 方法。
 
 ```javascript
- const outputHelp = async () => {
+const outputHelp = async () => {
   // other code ...
- }
+};
 
- this.program.option("-h, --help [verbose]", "Display help for commands and options.");
+this.program.option("-h, --help [verbose]", "Display help for commands and options.");
 ```
 
 ### action
@@ -739,13 +739,14 @@ async createCompiler(
 
 ## loadConfig
 
-该方法加载配置文件中的配置，如果没有指定配置文件日志，就从默认配置文件地址中取。
+该方法加载配置文件中的配置，如果没有指定配置文件路径，就从默认配置文件地址中取。
 
 ```javascript
 /**
   * 加载本地 webpack 配置文件中的配置
   */
 async loadConfig(options: Partial<WebpackDevServerOptions>) {
+  // 该依赖包返回了很多常用的文件后缀名以及可以处理它们的 babel 包名
   const interpret = require("interpret");
   const loadConfigByPath = async (configPath: string, argv: Argv = {}) => {
     try {
@@ -758,11 +759,12 @@ async loadConfig(options: Partial<WebpackDevServerOptions>) {
       // other code ...
     }
 
-    // other code ... 
+    // other code ...
 
     return { options, path: configPath };
   };
 
+  // 定义 config 格式
   const config: WebpackCLIConfig = {
     options: {} as WebpackConfiguration,
     path: new WeakMap(),
@@ -803,29 +805,39 @@ async loadConfig(options: Partial<WebpackDevServerOptions>) {
   }
 
   if (options.configName) {
-    // 判断所需属性是否都存在 
+    // 判断所需属性是否都存在
   }
 
   if (options.merge) {
     const merge = await this.tryRequireThenImport<typeof webpackMerge>("webpack-merge");
-    // 合并参数 
+    // 合并参数
   }
 
   return config;
 }
 ```
 
+最终返回的 config 如下所示：
+![config](https://raw.githubusercontent.com/aaaaaAndy/picture/main/images/20221129104631.png)
 
 ## buildConfig
 
-对 config 进行处理。
+该方法主要做两件事：
+1. 对从配置文件中获取到的配置项进行处理，将命令行参数与webpack.config.js中的配置项进行合并；
+2. 初始化一个叫 CLIPlugin 的插件。
 
 ```javascript
+/**
+ * 合并处理配置项及参数
+ * @param  {WebpackCLIConfig}                 config  从配置文件如 webpack.config.js 中获取的配置项
+ * @param  {Partial<WebpackDevServerOptions>} options 从命令行等地方获取的配置项
+ */
 async buildConfig(
   config: WebpackCLIConfig,
   options: Partial<WebpackDevServerOptions>,
   ): Promise<WebpackCLIConfig> {
-  // 执行函数
+  // 执行函数，如果参数是数组，则循环执行fn，否则，直接执行fn(options);
+  // 这里是对每个配置项的区别处理
   const runFunctionOnEachConfig = (
     options: ConfigOptions | ConfigOptions[],
     fn: CallableFunction,
@@ -858,6 +870,7 @@ async buildConfig(
     }
   }
 
+  // 判断 options.process
   if (typeof options.progress === "string" && options.progress !== "profile") {
     this.logger.error(
       `'${options.progress}' is an invalid value for the --progress option. Only 'profile' is allowed.`,
@@ -865,6 +878,7 @@ async buildConfig(
     process.exit(2);
   }
 
+  // 判断 options.hot
   if (typeof options.hot === "string" && options.hot !== "only") {
     this.logger.error(
       `'${options.hot}' is an invalid value for the --hot option. Use 'only' instead.`,
@@ -872,256 +886,150 @@ async buildConfig(
     process.exit(2);
   }
 
+  // 引入 CLIPlugin
   const CLIPlugin = await this.tryRequireThenImport<
   Instantiable<CLIPluginClass, [CLIPluginOptions]>
   >("./plugins/CLIPlugin");
 
+  // 主要是这个函数对配置进行处理
   const internalBuildConfig = (item: WebpackConfiguration) => {
-      // Output warnings
-    if (
-      item.watch &&
-      options.argv &&
-      options.argv.env &&
-      (options.argv.env["WEBPACK_WATCH"] || options.argv.env["WEBPACK_SERVE"])
-      ) {
-      this.logger.warn(
-        `No need to use the '${
-          options.argv.env["WEBPACK_WATCH"] ? "watch" : "serve"
-        }' command together with '{ watch: true }' configuration, it does not make sense.`,
-        );
-
-    if (options.argv.env["WEBPACK_SERVE"]) {
-      item.watch = false;
-    }
-  }
-
-      // Apply options
-  if (this.webpack.cli) {
-    const args: Record<string, Argument> = this.getBuiltInOptions()
-    .filter((flag) => flag.group === "core")
-    .reduce((accumulator: Record<string, Argument>, flag) => {
-      accumulator[flag.name] = flag as unknown as Argument;
-      return accumulator;
-    }, {});
-
-    const values: ProcessedArguments = Object.keys(options).reduce(
-      (accumulator: ProcessedArguments, name) => {
-        if (name === "argv") {
-          return accumulator;
-        }
-
-        const kebabName = this.toKebabCase(name);
-
-        if (args[kebabName]) {
-          accumulator[kebabName] = options[name as keyof typeof options as string];
-        }
-
-        return accumulator;
-      },
-      {},
-      );
-
-    const problems: Problem[] | null = this.webpack.cli.processArguments(args, item, values);
-
-    if (problems) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const groupBy = (xs: Record<string, any>[], key: string) => {
-        return xs.reduce((rv, x) => {
-          (rv[x[key]] = rv[x[key]] || []).push(x);
-
-          return rv;
-        }, {});
-      };
-      const problemsByPath = groupBy(problems, "path");
-
-      for (const path in problemsByPath) {
-        const problems = problemsByPath[path];
-
-        problems.forEach((problem: Problem) => {
-          this.logger.error(
-            `${this.capitalizeFirstLetter(problem.type.replace(/-/g, " "))}${
-              problem.value ? ` '${problem.value}'` : ""
-            } for the '--${problem.argument}' option${
-              problem.index ? ` by index '${problem.index}'` : ""
-            }`,
-            );
-
-          if (problem.expected) {
-            this.logger.error(`Expected: '${problem.expected}'`);
-          }
-        });
-      }
-
-      process.exit(2);
-    }
-
-    const isFileSystemCacheOptions = (
-      config: WebpackConfiguration,
-      ): config is FileSystemCacheOptions => {
-      return (
-        Boolean(config.cache) && (config as FileSystemCacheOptions).cache.type === "filesystem"
-        );
-    };
-
-        // Setup default cache options
-    if (isFileSystemCacheOptions(item)) {
-      const configPath = config.path.get(item);
-
-      if (configPath) {
-        if (!item.cache.buildDependencies) {
-          item.cache.buildDependencies = {};
-        }
-
-        if (!item.cache.buildDependencies.defaultConfig) {
-          item.cache.buildDependencies.defaultConfig = [];
-        }
-
-        if (Array.isArray(configPath)) {
-          configPath.forEach((oneOfConfigPath) => {
-            (
-              item.cache.buildDependencies as NonNullable<
-              FileSystemCacheOptions["cache"]["buildDependencies"]
-              >
-              ).defaultConfig.push(oneOfConfigPath);
-          });
-        } else {
-          item.cache.buildDependencies.defaultConfig.push(configPath);
-        }
-      }
-    }
-  }
-
   // Setup legacy logic for webpack@4
   // TODO respect `--entry-reset` in th next major release
   // TODO drop in the next major release
-  if (options.entry) {
-    item.entry = options.entry;
-  }
+    // options 是最早通过命令行得到的参数，这里是将命令行参数和 webpack.config.js 中的配置进行合并
+    if (options.entry) {
+      item.entry = options.entry;
+    }
 
-  if (options.outputPath) {
-    item.output = { ...item.output, ...{ path: path.resolve(options.outputPath) } };
-  }
+    if (options.outputPath) {
+      item.output = { ...item.output, ...{ path: path.resolve(options.outputPath) } };
+    }
 
-  if (options.target) {
-    item.target = options.target;
-  }
+    if (options.target) {
+      item.target = options.target;
+    }
 
-  if (typeof options.devtool !== "undefined") {
-    item.devtool = options.devtool;
-  }
+    if (typeof options.devtool !== "undefined") {
+      item.devtool = options.devtool;
+    }
 
-  if (options.name) {
-    item.name = options.name;
-  }
+    if (options.name) {
+      item.name = options.name;
+    }
 
-  if (typeof options.stats !== "undefined") {
-    item.stats = options.stats;
-  }
+    if (typeof options.stats !== "undefined") {
+      item.stats = options.stats;
+    }
 
-  if (typeof options.watch !== "undefined") {
-    item.watch = options.watch;
-  }
+    if (typeof options.watch !== "undefined") {
+      item.watch = options.watch;
+    }
 
-  if (typeof options.watchOptionsStdin !== "undefined") {
-    item.watchOptions = { ...item.watchOptions, ...{ stdin: options.watchOptionsStdin } };
-  }
+    if (typeof options.watchOptionsStdin !== "undefined") {
+      item.watchOptions = { ...item.watchOptions, ...{ stdin: options.watchOptionsStdin } };
+    }
 
-  if (options.mode) {
-    item.mode = options.mode;
-  }
+    if (options.mode) {
+      item.mode = options.mode;
+    }
 
       // Respect `process.env.NODE_ENV`
-  if (
-    !item.mode &&
-    process.env &&
-    process.env.NODE_ENV &&
-    (process.env.NODE_ENV === "development" ||
-      process.env.NODE_ENV === "production" ||
-      process.env.NODE_ENV === "none")
-    ) {
-    item.mode = process.env.NODE_ENV;
-}
+    if (
+      !item.mode &&
+      process.env &&
+      process.env.NODE_ENV &&
+      (process.env.NODE_ENV === "development" ||
+        process.env.NODE_ENV === "production" ||
+        process.env.NODE_ENV === "none")
+      ) {
+        item.mode = process.env.NODE_ENV;
+      }
 
       // Setup stats
       // TODO remove after drop webpack@4
-const statsForWebpack4 =
-this.webpack.Stats &&
-(this.webpack.Stats as unknown as Partial<WebpackV4LegacyStats>).presetToOptions;
+      const statsForWebpack4 =
+      this.webpack.Stats &&
+      (this.webpack.Stats as unknown as Partial<WebpackV4LegacyStats>).presetToOptions;
 
-if (statsForWebpack4) {
-  if (typeof item.stats === "undefined") {
-    item.stats = {};
-  } else if (typeof item.stats === "boolean") {
-    item.stats = (this.webpack.Stats as unknown as WebpackV4LegacyStats).presetToOptions(
-      item.stats,
-      );
-  } else if (
-    typeof item.stats === "string" &&
-    (item.stats === "none" ||
-      item.stats === "verbose" ||
-      item.stats === "detailed" ||
-      item.stats === "normal" ||
-      item.stats === "minimal" ||
-      item.stats === "errors-only" ||
-      item.stats === "errors-warnings")
-    ) {
-    item.stats = (this.webpack.Stats as unknown as WebpackV4LegacyStats).presetToOptions(
-      item.stats,
-      );
-  }
-} else {
-  if (typeof item.stats === "undefined") {
-    item.stats = { preset: "normal" };
-  } else if (typeof item.stats === "boolean") {
-    item.stats = item.stats ? { preset: "normal" } : { preset: "none" };
-  } else if (typeof item.stats === "string") {
-    item.stats = { preset: item.stats };
-  }
-}
+      // 定义 item.stats
+      if (statsForWebpack4) {
+        if (typeof item.stats === "undefined") {
+          item.stats = {};
+        } else if (typeof item.stats === "boolean") {
+          item.stats = (this.webpack.Stats as unknown as WebpackV4LegacyStats).presetToOptions(
+            item.stats,
+            );
+        } else if (
+          typeof item.stats === "string" &&
+          (item.stats === "none" ||
+            item.stats === "verbose" ||
+            item.stats === "detailed" ||
+            item.stats === "normal" ||
+            item.stats === "minimal" ||
+            item.stats === "errors-only" ||
+            item.stats === "errors-warnings")
+          ) {
+          item.stats = (this.webpack.Stats as unknown as WebpackV4LegacyStats).presetToOptions(
+            item.stats,
+            );
+        }
+      } else {
+        if (typeof item.stats === "undefined") {
+          item.stats = { preset: "normal" };
+        } else if (typeof item.stats === "boolean") {
+          item.stats = item.stats ? { preset: "normal" } : { preset: "none" };
+        } else if (typeof item.stats === "string") {
+          item.stats = { preset: item.stats };
+        }
+      }
 
-let colors;
+      let colors;
 
       // From arguments
-if (typeof this.isColorSupportChanged !== "undefined") {
-  colors = Boolean(this.isColorSupportChanged);
-}
+      if (typeof this.isColorSupportChanged !== "undefined") {
+        colors = Boolean(this.isColorSupportChanged);
+      }
       // From stats
-else if (typeof (item.stats as StatsOptions).colors !== "undefined") {
-  colors = (item.stats as StatsOptions).colors;
-}
+      else if (typeof (item.stats as StatsOptions).colors !== "undefined") {
+        colors = (item.stats as StatsOptions).colors;
+      }
       // Default
-else {
-  colors = Boolean(this.colors.isColorSupported);
-}
+      else {
+        colors = Boolean(this.colors.isColorSupported);
+      }
 
       // TODO remove after drop webpack v4
-if (typeof item.stats === "object" && item.stats !== null) {
-  item.stats.colors = colors;
-}
+      if (typeof item.stats === "object" && item.stats !== null) {
+        item.stats.colors = colors;
+      }
 
       // Apply CLI plugin
-if (!item.plugins) {
-  item.plugins = [];
+      // 初始化插件
+      if (!item.plugins) {
+        item.plugins = [];
+      }
+
+      // 添加一个 CLI 插件
+      item.plugins.unshift(
+        new CLIPlugin({
+          configPath: config.path.get(item),
+          helpfulOutput: !options.json,
+          hot: options.hot,
+          progress: options.progress,
+          prefetch: options.prefetch,
+          analyze: options.analyze,
+        }),
+        );
+
+      return options;
+    };
+
+    // 注意这里是把config.options传入，config.options 即为 webpack.config.js 中的各种配置项
+    runFunctionOnEachConfig(config.options, internalBuildConfig);
+
+    return config;
 }
-
-item.plugins.unshift(
-  new CLIPlugin({
-    configPath: config.path.get(item),
-    helpfulOutput: !options.json,
-    hot: options.hot,
-    progress: options.progress,
-    prefetch: options.prefetch,
-    analyze: options.analyze,
-  }),
-  );
-
-return options;
-};
-
-runFunctionOnEachConfig(config.options, internalBuildConfig);
-
-return config;
-}
-
 ```
 
+最终 return 的结果如下所示：
+![config](https://raw.githubusercontent.com/aaaaaAndy/picture/main/images/20221129105346.png)

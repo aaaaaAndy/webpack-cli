@@ -118,22 +118,27 @@ export class CLIPlugin {
   apply(compiler: Compiler) {
     this.logger = compiler.getInfrastructureLogger("webpack-cli");
 
+    // 是否打印编译进度，对应命令行 --progress 参数
     if (this.options.progress) {
       this.setupProgressPlugin(compiler);
     }
 
+    // 是否开启热更新，对应命令行 --hot 参数
     if (this.options.hot) {
       this.setupHotPlugin(compiler);
     }
 
+    // 是否预获取模块
     if (this.options.prefetch) {
       this.setupPrefetchPlugin(compiler);
     }
 
+    // 是否调用 webpack-bundle-analyzer 插件来获取 bundle 信息，对应命令行 --analyze 参数
     if (this.options.analyze) {
       this.setupBundleAnalyzerPlugin(compiler);
     }
 
+    // 打印一些提示信息
     this.setupHelpfulOutput(compiler);
   }
 }

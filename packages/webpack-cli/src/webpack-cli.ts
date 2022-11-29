@@ -2128,6 +2128,11 @@ class WebpackCLI implements IWebpackCLI {
     return config;
   }
 
+/**
+ * 合并处理配置项及参数
+ * @param  {WebpackCLIConfig}                 config  从配置文件如 webpack.config.js 中获取的配置项
+ * @param  {Partial<WebpackDevServerOptions>} options 从命令行等地方获取的配置项
+ */
   async buildConfig(
     config: WebpackCLIConfig,
     options: Partial<WebpackDevServerOptions>,
@@ -2163,6 +2168,7 @@ class WebpackCLI implements IWebpackCLI {
       }
     }
 
+    // 判断 options.process
     if (typeof options.progress === "string" && options.progress !== "profile") {
       this.logger.error(
         `'${options.progress}' is an invalid value for the --progress option. Only 'profile' is allowed.`,
@@ -2170,6 +2176,7 @@ class WebpackCLI implements IWebpackCLI {
       process.exit(2);
     }
 
+    // 判断 options.hot
     if (typeof options.hot === "string" && options.hot !== "only") {
       this.logger.error(
         `'${options.hot}' is an invalid value for the --hot option. Use 'only' instead.`,
@@ -2177,10 +2184,13 @@ class WebpackCLI implements IWebpackCLI {
       process.exit(2);
     }
 
+    // 引入 CLIPlugin
     const CLIPlugin = await this.tryRequireThenImport<
       Instantiable<CLIPluginClass, [CLIPluginOptions]>
     >("./plugins/CLIPlugin");
 
+    // 主要是这个函数对配置进行处理
+    // options 是最早通过命令行得到的参数，这里是将命令行参数和 webpack.config.js 中的配置进行合并
     const internalBuildConfig = (item: WebpackConfiguration) => {
       // Output warnings
       if (
